@@ -1,0 +1,89 @@
+---
+title: "p8105_hw5_yc3577"
+author: "Yimeng Cai"
+date: "11/13/2023"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(readr)
+library(purrr)
+```
+
+Problem 2
+```{r}
+
+file_names = 
+  list.files(path = './data', 
+             pattern = '.csv',
+             full.names = TRUE)
+file_names
+
+
+df = 
+  file_names |>
+      map_dfr(~read_csv(.x)  |>
+             mutate(subject_id = str_extract(.x, '\\d+'),
+                    control_arm = str_extract(.x, 'con|exp')))
+df
+
+cleaned_df =
+  df |>
+  pivot_longer(
+    week_1:week_8,
+    names_to = 'week',
+    values_to = 'observation'
+  ) |>
+    mutate(
+    week = recode(week, 
+                  'week_1' = '1',
+                  'week_2' = '2',
+                  'week_3' = '3',
+                  'week_4' = '4',
+                  'week_5' = '5',
+                  'week_6' = '6',
+                  'week_7' = '7',
+                  'week_8' = '8'
+                  )
+  )
+cleaned_df
+```
+```{r}
+spa_plot = 
+  ggplot(cleaned_df,
+         aes(x = week, 
+             y = observation,
+             group = subject_id,
+             color = control_arm)) +
+  facet_wrap(~control_arm) +
+  geom_line() +
+  geom_point() +
+  labs(title = 'Spaghetti Plot of Observations over Weeks',
+       x = 'Week',
+       y = 'Observation')
+
+spa_plot
+```
+
+Problem 3
+
+```{r}
+simulation = function(sample_size, mu = 0, sigma = 5) {
+sim_data = 
+  tibble(
+    x = rnorm(n = sample_size, mean = mu, sd = sigma)
+  )
+
+sim_data %>%
+  summarize(
+    mean = mean(x),
+    sd = sd(x)
+  )
+
+}
+
+simulation(30)
+```
+
