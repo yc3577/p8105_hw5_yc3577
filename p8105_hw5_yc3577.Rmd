@@ -338,7 +338,9 @@ average_null_plot =
 average_null_plot
 ```
  
- 
+Comment: the average null plot shows a relative positive relationship while there is some differences between this graph to the last graph from 0 to 1 that the slope is higher from 0 to 1 and it decreases after true mean value of 1. 
+the later trend is similar. 
+
 Is the sample average of μ̂ across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?
 
-No, he average estimates plot shows the average estimate of μ is approximately equal to the true value of μ. However, the average estimate of μ̂ only in samples for which the null was rejected have some difference with the true value ofu.since,wWhen the true value of mu is closer to the null hypothesis, the test may not have enough power to consistently reject the null hypothesis, leading to a biased sample of estimates where the null is rejected. As the true value of mu increases, the power of the test also increases, making it more likely to reject the null hypothesis when it is false.
+No, the average estimates plot shows the average estimate of μ is approximately equal to the true value of mean. However, the average estimate of μ̂ only in samples for which the null was rejected have some difference with the true value fou wWhen the true value of mu is closer to the null hypothesis, the test may not have enough power to reject the null hypothesis, leading to a biased sample of estimates. The power of the test increases, when the true mean increases, so it is more likely to reject the null hypothesis when it is false.
