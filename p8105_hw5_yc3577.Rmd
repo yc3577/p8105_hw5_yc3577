@@ -10,11 +10,116 @@ library(tidyverse)
 library(dbplyr)
 library(readr)
 library(purrr)
+library(tidyr)
 ```
 
-Problem 2
+Problem 1
+
+The Washington Post has gathered data on homicides in 50 large U.S. cities and made the data available through a GitHub repository here. You can read their accompanying article here.
+
+Describe the raw data. Create a city_state variable (e.g. “Baltimore, MD”) and then summarize within cities to obtain the total number of homicides and the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
 ```{r}
 
+homicide = 
+  read.csv("./homicide-data.csv")|>
+  mutate(city_state = paste(city, state, sep = ", "))
+
+homicide
+
+
+homicide_data =
+  homicide |>
+  group_by (city) |>
+  summarize(total_homicides=n(),
+            unsolved_homicides=sum(disposition %in% c("Closed without arrest","Closed by arrest")))
+homicide_data
+```
+
+For the city of Baltimore, MD, use the prop.test function to estimate the proportion of homicides that are unsolved; save the output of prop.test as an R object, apply the broom::tidy to this object and pull the estimated proportion and confidence intervals from the resulting tidy dataframe.
+```{r}
+baltimore_data =
+  homicide |>
+  filter(city == "Baltimore", state == "MD")
+
+baltimore_data
+
+unsolved_homicides = 
+  sum(baltimore_data$disposition %in% c("Closed without arrest", "Open/No arrest"))
+
+total_homicides = 
+  nrow(baltimore_data)
+
+prop_test =  
+  prop.test(unsolved_homicides, total_homicides)
+
+
+tidy_prop = broom::tidy(prop_test)
+
+
+tidy_ci = 
+  tidy_prop %>%
+  select(estimate, conf.low, conf.high) %>%
+  pull()
+
+tidy_ci
+
+
+```
+
+Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
+```{r}
+# Create a summary dataframe with counts of unsolved and total homicides by city
+city_summary <- homicide %>%
+  group_by(city, state) %>%
+  summarise(
+    unsolved_homicides = sum(disposition %in% c("Closed without arrest", "Open/No arrest")),
+    total_homicides = n(),
+    .groups = "drop"
+  )
+
+# Use purrr to apply prop.test to each city and tidy the results
+tidy_prop_test_results <- city_summary %>%
+  mutate(
+    prop_test = map2(unsolved_homicides, total_homicides, ~prop.test(.x, .y)),
+    tidy_results = map(prop_test, broom::tidy)
+  ) %>%
+  select(city, state, tidy_results) %>%
+  unnest(tidy_results)
+
+tidy_proportions_ci <- tidy_prop_test_results %>%
+  select(city, state, estimate, conf.low, conf.high)
+tidy_proportions_ci
+
+```
+
+
+Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+```{r}
+tidy_proportions_ci <- tidy_proportions_ci %>%
+  arrange(desc(estimate))
+plot <- ggplot(tidy_proportions_ci, aes(x = reorder(city, estimate), y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +  # Flip the axes to make the plot horizontal
+  labs(x = "City", y = "Proportion of Unsolved Homicides", title = "Proportion of Unsolved Homicides by City") +
+  theme_minimal()
+
+```
+
+
+
+Problem 2
+
+This zip file contains data from a longitudinal study that included a control arm and an experimental arm. Data for each participant is included in a separate file, and file names include the subject ID and arm.
+Create a tidy dataframe containing data from all participants, including the subject ID, arm, and observations over time:
+- Start with a dataframe containing all file names; the list.files function will help. 
+- Iterate over file names and read in data for each subject using purrr::map and saving the result as a new variable in the dataframe.
+- Tidy the result; manipulate file names to include control arm and subject ID, make sure weekly observations are “tidy”, and do any other tidying that’s necessary. 
+
+
+Firstly, we load in the data files by using `list.files()` with input of `path`, `pattern`, and `full.names`. Then we will use `map_dfr`to map the function of `read_csv()` that load in several csv documents with repetition. We should also use `mutate()` to help combine the csv documents together with corresponded `subject_id` and `control_arm`. By using `str_extract()` function, we can use regex to extract the according values we want. 
+After getting the combined dataframe, we need to clean it by using `pivot_longer()` to collect the week 1 to week 8 together into one week column. Then for later graphing, we need to recode the week_1 to 1 by using `mutate()` and `recode()`.
+```{r}
 file_names = 
   list.files(path = './data', 
              pattern = '.csv',
@@ -50,6 +155,11 @@ cleaned_df =
   )
 cleaned_df
 ```
+
+Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.
+
+
+After we get the cleaned table, we can plot the observations with `ggplot()` and we need to group by the subject_id and make color differences according to control_arm. Then we need to add `facet_wrap(~control_arm)` to wrap the control and experimental group separately for comparison, and we add `geom_line()` and `geom_point()` for visualisation and add title and axis name with `labs()`.
 ```{r}
 spa_plot = 
   ggplot(cleaned_df,
@@ -66,9 +176,28 @@ spa_plot =
 
 spa_plot
 ```
+From the graph, the majority of experimental group has relative higher values of observation over 8 weeks than those of the control group. Though, in each group, there is variation during 8 weeks, while the trend of experimental group is upward, and the control group is flatter. During the 1st week, the control group has an observation value around 0 to 2.5 and goes to near 4.3 at a highest value and goes to near -2.5 at the lowest value during week 5 and week 6, and finally get to stable between 0 to 2.5 at final week. Therefore, the trend for control group is flat. During the 1st week, the experimental group has a relative lower start from -1 to 3.75, and it increases while fluctuating and goes up to 7.5 in week 7 and get to the final value around 3 to 6.785. Moreover, the experimental group seems to have a larger variation and fluctuation range. However the overall trend is clear that the control group's observation values fluctuate around a smaller range, and the experimental group's observation values increase through time and fluctuate in a larger range.
 
 Problem 3
 
+When designing an experiment or analysis, a common question is whether it is likely that a true effect will be detected – put differently, whether a false null hypothesis will be rejected. The probability that a false null hypothesis is rejected is referred to as power, and it depends on several factors, including: the sample size; the effect size; and the error variance. In this problem, you will conduct a simulation to explore power in a one-sample t-test.
+
+First set the following design elements:
+
+Fix n=30
+Fix σ=5
+Set μ=0
+. Generate 5000 datasets from the model
+
+x∼Normal[μ,σ]
+
+For each dataset, save μ̂ 
+ and the p-value arising from a test of H:μ=0
+ using α=0.05
+. Hint: to obtain the estimate and p-value, use broom::tidy to clean the output of t.test.
+
+We will do a simulation function by using `function()` and setting sigma = 5, sample_size = 30. Then we will add t test with `t.test()` with `broom::tidy` to tidy the test results.
+Then we use a for loop to run the simulaiton 5000 times with input of mu = 0.
 ```{r}
 set.seed(12345)
 
@@ -96,14 +225,17 @@ for (i in 1:5000) {
 
 sim_datasets = bind_rows(output)
 sim_datasets
-
-
 ```
+
+
+Repeat the above for μ={1,2,3,4,5,6}
+
+After we create the simulation function, we can use `expand_grid` for repetition by specifying input values of 0 to 6 and iteration times of 5000. Then we can use `mutate()` to use `map()` to map the function of `simulation` on the input of mu. Then we use `unnest()` to get our new repetition data. 
 ```{r}
 # Repeat the above simulation for u ={1,2,3,4,5,6}
 repetition =
   expand_grid(
-    mu = c(1,2,3,4,5,6),
+    mu = c(0,1,2,3,4,5,6),
     iter = 1:5000
   ) |>
   mutate(
@@ -115,8 +247,9 @@ repetition
 ```
 
 
-
 Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis. Describe the association between effect size and power.
+
+To make a power plot, we need to clean the repetition by using `group_by()` and `summarise()` to get our x and y and then use `ggplot()` to plot the graph. Then we add `geom_line()` and `geom_point()` and `geom_smooth()` for visualizations then finally add title and axis names with `labs()`.
 ```{r}
 power_df = 
   repetition |>
@@ -143,8 +276,69 @@ power_plot =
 power_plot
 ```
 
-Make a plot showing the average estimate of μ̂ on the y axis and the true value of μ on the x axis. Make a second plot (or overlay on the first) the average estimate of μ̂ only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. 
-```{r}
+Comment: the power plot shows a relatively upward trending of proportion vs true mean that there may be a positive association, while when the true mean reaches 3, the proportion stays at the high value till true mean reaches 6. 
 
+Make a plot showing the average estimate of μ̂ on the y axis and the true value of μ on the x axis
+
+To make a comparison plot, we need to clean the repetition by using `group_by()` and `summarise()` to get our x and y and then use `ggplot()` to plot the graph. Then we add `geom_line()` and `geom_point()` and `geom_smooth()` for visualizations then finally add title and axis names with `labs()`.
+```{r}
+esti_true_df =
+  repetition |>
+  group_by(mu) |>
+  summarise(
+    average_estimate = mean(estimate),
+    true_mean = mu
+  )
+
+esti_true_df
+
+esti_true_plot =
+  esti_true_df |>
+  ggplot(aes(x = true_mean, y = average_estimate)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth() +
+  labs(
+    title = 'Average Estimated Mean VS True Value Mean',
+    x = 'True Value Mean',
+    y = 'Average Estimated Mean'
+  )
+
+esti_true_plot
 ```
 
+Comment: the esti true plot shows a strictly positive relationship between average estimated mean and true mean the higher the true mean, the higher the estimated mean. 
+
+Make a second plot (or overlay on the first) the average estimate of μ̂ only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. 
+ 
+ To make a comparison plot on null rejected, we need to clean the repetition by using `group_by()` and `summarise()` and `filter()` to get our x and y and then use `ggplot()` to plot the graph. Then we add `geom_line()` and `geom_point()` and `geom_smooth()` for visualizations then finally add title and axis names with `labs()`.
+```{r}
+average_null_df =
+  repetition |>
+  group_by(mu) |>
+  filter(p.value <0.05) |>
+  summarise(
+    average_estimate_null = mean(estimate)
+  )
+
+average_null_df
+
+average_null_plot =
+  average_null_df |>
+  ggplot(aes(x = mu, y = average_estimate_null)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth() +
+  labs(
+    title = 'Average Estimate Mean on Null VS True Mean Value',
+    x = 'True Mean Value',
+    y = 'Average Estimate Mean on Null'
+  )
+
+average_null_plot
+```
+ 
+ 
+Is the sample average of μ̂ across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?
+
+No, he average estimates plot shows the average estimate of μ is approximately equal to the true value of μ. However, the average estimate of μ̂ only in samples for which the null was rejected have some difference with the true value ofu.since,wWhen the true value of mu is closer to the null hypothesis, the test may not have enough power to consistently reject the null hypothesis, leading to a biased sample of estimates where the null is rejected. As the true value of mu increases, the power of the test also increases, making it more likely to reject the null hypothesis when it is false.
